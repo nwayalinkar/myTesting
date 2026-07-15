@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pulse Chat – Real‑time Demo</title>
+  <meta name="description" content="A premium real‑time chat demo built with pure HTML, CSS, and JavaScript. Features multiple rooms, avatars, emoji reactions, typing indicators, and dark/light theme." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar: Rooms & Users -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h2>Pulse Chat</h2>
+        <button id="themeToggle" class="theme-btn" aria-label="Toggle dark/light theme">🌙</button>
+      </div>
+      <div class="profile-section">
+        <div class="avatar" id="userAvatar"></div>
+        <div class="profile-inputs">
+          <input type="text" id="usernameInput" placeholder="Enter your name" autocomplete="off" />
+          <button id="setNameBtn" class="primary-btn">Set Name</button>
+        </div>
+      </div>
+      <nav class="rooms">
+        <div class="section-header">
+          <h3>Rooms</h3>
+          <button id="addRoomBtn" class="add-room-btn" title="Create New Room">+</button>
+        </div>
+        <ul id="roomList"></ul>
+      </nav>
+      <div class="online-users-section">
+        <h3>Online Members</h3>
+        <ul id="onlineUsersList"></ul>
+      </div>
+    </aside>
+
+    <!-- Main Chat Area -->
+    <main class="chat-area" id="chatArea">
+      <header class="chat-header">
+        <button id="sidebarToggle" class="sidebar-toggle-btn" aria-label="Toggle Sidebar">☰</button>
+        <h1 id="currentRoomName"># general</h1>
+      </header>
+      <section class="messages" id="messagesContainer"></section>
+      <div class="typing-indicator" id="typingIndicator"></div>
+      <footer class="chat-input">
+        <textarea id="messageInput" rows="1" placeholder="Type a message..." autocomplete="off" disabled></textarea>
+        <button id="sendBtn" class="primary-btn" disabled>Send</button>
+      </footer>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
