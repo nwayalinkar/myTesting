@@ -1,14 +1,61 @@
-// BroadcastChannel name for the app
-const CHANNEL_NAME = 'pulse_chat_realtime';
+// Robust fallback storage in case localStorage is disabled or restricted (e.g. in private browsing/sandboxes)
+const SafeStorage = {
+  fallback: {},
+  getItem(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      return this.fallback[key] || null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      this.fallback[key] = value;
+    }
+  }
+};
 
-// Default initial chat rooms
+// Robust fallback for BroadcastChannel to avoid crashes in restricted environments
+class SafeBroadcastChannel {
+  constructor(name) {
+    try {
+      this.channel = new BroadcastChannel(name);
+    } catch (e) {
+      console.warn("BroadcastChannel not supported or blocked in this environment. Running in local fallback mode.", e);
+      this.channel = null;
+    }
+  }
+
+  set onmessage(callback) {
+    if (this.channel) {
+      this.channel.onmessage = callback;
+    } else {
+      this.onmessageCallback = callback;
+    }
+  }
+
+  postMessage(message) {
+    if (this.channel) {
+      this.channel.postMessage(message);
+    } else {
+      // In local-only mode, simulate standard messaging so at least the tab updates itself
+      if (this.onmessageCallback) {
+        setTimeout(() => this.onmessageCallback({ data: message }), 0);
+      }
+    }
+  }
+}
+
+const CHANNEL_NAME = 'pulse_chat_realtime';
 const DEFAULT_ROOMS = ['general', 'random', 'help', 'project-updates'];
 
 class PulseChatApp {
   constructor() {
     this.userId = this.getOrCreateUserId();
-    this.username = localStorage.getItem('pulse_chat_username') || '';
-    this.avatarBg = localStorage.getItem('pulse_chat_avatar_bg') || this.generateRandomColor();
+    this.username = SafeStorage.getItem('pulse_chat_username') || '';
+    this.avatarBg = SafeStorage.getItem('pulse_chat_avatar_bg') || this.generateRandomColor();
     this.currentRoom = 'general';
     
     // Application State
@@ -18,8 +65,8 @@ class PulseChatApp {
     this.typingTimeout = null;
     this.heartbeatInterval = null;
     
-    // Broadcast Channel for Real-time communication
-    this.channel = new BroadcastChannel(CHANNEL_NAME);
+    // Initializing safe Broadcast Channel
+    this.channel = new SafeBroadcastChannel(CHANNEL_NAME);
     
     // DOM Elements
     this.dom = {
@@ -53,7 +100,7 @@ class PulseChatApp {
     
     // Set up username state
     if (this.username) {
-      this.dom.usernameInput.value = this.username;
+      if (this.dom.usernameInput) this.dom.usernameInput.value = this.username;
       this.updateProfileAvatar(this.username, this.avatarBg);
       this.enableChat();
       this.startPresence();
@@ -74,10 +121,10 @@ class PulseChatApp {
 
   // --- UUID helper ---
   getOrCreateUserId() {
-    let id = localStorage.getItem('pulse_chat_user_id');
+    let id = SafeStorage.getItem('pulse_chat_user_id');
     if (!id) {
       id = 'user_' + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('pulse_chat_user_id', id);
+      SafeStorage.setItem('pulse_chat_user_id', id);
     }
     return id;
   }
@@ -94,40 +141,61 @@ class PulseChatApp {
 
   // --- Theme Management ---
   setupTheme() {
-    const savedTheme = localStorage.getItem('pulse_chat_theme') || 'dark';
+    const savedTheme = SafeStorage.getItem('pulse_chat_theme') || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
-    this.dom.themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+    if (this.dom.themeToggle) {
+      this.dom.themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+    }
   }
 
   toggleTheme() {
     const currentTheme = document.documentElement.getAttribute('data-theme');
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('pulse_chat_theme', newTheme);
-    this.dom.themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+    SafeStorage.setItem('pulse_chat_theme', newTheme);
+    if (this.dom.themeToggle) {
+      this.dom.themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+    }
   }
 
   // --- Data Loading & Storage ---
   loadRooms() {
-    const rooms = localStorage.getItem('pulse_chat_rooms');
-    return rooms ? JSON.parse(rooms) : [...DEFAULT_ROOMS];
+    try {
+      const rooms = SafeStorage.getItem('pulse_chat_rooms');
+      if (rooms) {
+        const parsed = JSON.parse(rooms);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn("Resetting room list", e);
+    }
+    return [...DEFAULT_ROOMS];
   }
 
   saveRooms() {
-    localStorage.setItem('pulse_chat_rooms', JSON.stringify(this.rooms));
+    SafeStorage.setItem('pulse_chat_rooms', JSON.stringify(this.rooms));
   }
 
   loadMessages() {
-    const msgs = localStorage.getItem('pulse_chat_messages');
-    return msgs ? JSON.parse(msgs) : [];
+    try {
+      const msgs = SafeStorage.getItem('pulse_chat_messages');
+      if (msgs) {
+        const parsed = JSON.parse(msgs);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn("Resetting message logs", e);
+    }
+    return [];
   }
 
   saveMessages() {
-    localStorage.setItem('pulse_chat_messages', JSON.stringify(this.messages));
+    SafeStorage.setItem('pulse_chat_messages', JSON.stringify(this.messages));
   }
 
   // --- Profile Flow ---
   updateProfileAvatar(name, color) {
+    if (!this.dom.userAvatar) return;
     const initials = name ? name.trim().charAt(0).toUpperCase() : '?';
     this.dom.userAvatar.textContent = initials;
     this.dom.userAvatar.style.backgroundColor = color;
@@ -135,13 +203,14 @@ class PulseChatApp {
   }
 
   handleSetName() {
+    if (!this.dom.usernameInput) return;
     const rawVal = this.dom.usernameInput.value.trim();
     if (!rawVal) return;
 
     const oldUsername = this.username;
     this.username = rawVal;
-    localStorage.setItem('pulse_chat_username', this.username);
-    localStorage.setItem('pulse_chat_avatar_bg', this.avatarBg);
+    SafeStorage.setItem('pulse_chat_username', this.username);
+    SafeStorage.setItem('pulse_chat_avatar_bg', this.avatarBg);
 
     this.updateProfileAvatar(this.username, this.avatarBg);
     this.enableChat();
@@ -156,20 +225,27 @@ class PulseChatApp {
   }
 
   enableChat() {
-    this.dom.messageInput.removeAttribute('disabled');
-    this.dom.sendBtn.removeAttribute('disabled');
-    this.dom.messageInput.placeholder = "Type a message...";
+    if (this.dom.messageInput) {
+      this.dom.messageInput.removeAttribute('disabled');
+      this.dom.messageInput.placeholder = "Type a message...";
+    }
+    if (this.dom.sendBtn) {
+      this.dom.sendBtn.removeAttribute('disabled');
+    }
   }
 
   disableChat() {
-    this.dom.messageInput.setAttribute('disabled', 'true');
-    this.dom.sendBtn.setAttribute('disabled', 'true');
-    this.dom.messageInput.placeholder = "Please enter your name to start chatting...";
+    if (this.dom.messageInput) {
+      this.dom.messageInput.setAttribute('disabled', 'true');
+      this.dom.messageInput.placeholder = "Please enter your name to start chatting...";
+    }
+    if (this.dom.sendBtn) {
+      this.dom.sendBtn.setAttribute('disabled', 'true');
+    }
   }
 
   // --- Presence & Live Status updates ---
   startPresence() {
-    // Send heartbeat immediately, then periodically
     this.sendHeartbeat();
     if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
     this.heartbeatInterval = setInterval(() => this.sendHeartbeat(), 4000);
@@ -190,7 +266,6 @@ class PulseChatApp {
     const now = Date.now();
     let presenceChanged = false;
     for (const [uid, user] of this.activeUsers.entries()) {
-      // If user hasn't sent a heartbeat for more than 10 seconds, remove them
       if (now - user.lastSeen > 10000) {
         this.activeUsers.delete(uid);
         presenceChanged = true;
@@ -202,9 +277,9 @@ class PulseChatApp {
   }
 
   renderOnlineUsers() {
+    if (!this.dom.onlineUsersList) return;
     this.dom.onlineUsersList.innerHTML = '';
     
-    // Add current user first
     if (this.username) {
       const selfItem = document.createElement('li');
       selfItem.className = 'user-item';
@@ -215,7 +290,6 @@ class PulseChatApp {
       this.dom.onlineUsersList.appendChild(selfItem);
     }
 
-    // Add other active users
     this.activeUsers.forEach((user) => {
       const userItem = document.createElement('li');
       userItem.className = 'user-item';
@@ -230,6 +304,7 @@ class PulseChatApp {
 
   // --- Chat Messaging & Storage UI ---
   renderRooms() {
+    if (!this.dom.roomList) return;
     this.dom.roomList.innerHTML = '';
     this.rooms.forEach((room) => {
       const li = document.createElement('li');
@@ -245,19 +320,21 @@ class PulseChatApp {
 
   switchRoom(roomName) {
     this.currentRoom = roomName;
-    this.dom.currentRoomName.textContent = `# ${roomName}`;
+    if (this.dom.currentRoomName) {
+      this.dom.currentRoomName.textContent = `# ${roomName}`;
+    }
     this.renderRooms();
     this.renderMessages();
     
-    // Clear badge
     const badge = document.getElementById(`badge-${roomName}`);
     if (badge) {
       badge.textContent = '0';
       badge.className = 'room-badge';
     }
 
-    // Close mobile drawer if open
-    this.dom.sidebar.classList.remove('open');
+    if (this.dom.sidebar) {
+      this.dom.sidebar.classList.remove('open');
+    }
   }
 
   handleAddRoom() {
@@ -282,6 +359,7 @@ class PulseChatApp {
   }
 
   sendMessage() {
+    if (!this.dom.messageInput) return;
     const text = this.dom.messageInput.value.trim();
     if (!text || !this.username) return;
 
@@ -294,7 +372,7 @@ class PulseChatApp {
       type: 'user',
       text: text,
       timestamp: Date.now(),
-      reactions: {} // emoji -> [userIds]
+      reactions: {}
     };
 
     this.messages.push(message);
@@ -331,9 +409,9 @@ class PulseChatApp {
   }
 
   renderMessages() {
+    if (!this.dom.messagesContainer) return;
     this.dom.messagesContainer.innerHTML = '';
     
-    // Filter messages for current room
     const roomMessages = this.messages.filter(m => m.room === this.currentRoom);
     
     if (roomMessages.length === 0) {
@@ -357,18 +435,15 @@ class PulseChatApp {
         group.className = `message-group ${isSelf ? 'self' : 'other'}`;
         group.dataset.messageId = msg.id;
 
-        // Avatar
         const avatar = document.createElement('div');
         avatar.className = 'msg-avatar';
         avatar.style.backgroundColor = msg.avatarBg;
         avatar.textContent = initials;
         group.appendChild(avatar);
 
-        // Content Wrapper
         const wrapper = document.createElement('div');
         wrapper.className = 'message-content-wrapper';
 
-        // Meta Info
         const meta = document.createElement('div');
         meta.className = 'message-meta';
         meta.innerHTML = `
@@ -377,19 +452,16 @@ class PulseChatApp {
         `;
         wrapper.appendChild(meta);
 
-        // Bubble
         const bubble = document.createElement('div');
         bubble.className = 'message-bubble';
         bubble.textContent = msg.text;
         wrapper.appendChild(bubble);
 
-        // Reactions View
         const rxnsContainer = document.createElement('div');
         rxnsContainer.className = 'reactions-container';
         this.renderReactions(msg, rxnsContainer);
         wrapper.appendChild(rxnsContainer);
 
-        // Reaction Picker Trigger
         const trigger = document.createElement('button');
         trigger.className = 'reaction-picker-trigger';
         trigger.innerHTML = '☺';
@@ -405,11 +477,9 @@ class PulseChatApp {
       }
     });
 
-    // Auto-scroll to bottom
     this.dom.messagesContainer.scrollTop = this.dom.messagesContainer.scrollHeight;
   }
 
-  // --- Emoji Reactions Implementation ---
   renderReactions(message, container) {
     container.innerHTML = '';
     const reactions = message.reactions || {};
@@ -430,7 +500,6 @@ class PulseChatApp {
   }
 
   showEmojiPopover(triggerElement, messageId) {
-    // Remove existing popovers
     document.querySelectorAll('.emoji-popover').forEach(p => p.remove());
 
     const popover = document.createElement('div');
@@ -450,7 +519,6 @@ class PulseChatApp {
 
     triggerElement.parentElement.appendChild(popover);
 
-    // Auto-remove popover when clicking anywhere else
     const closeHandler = () => {
       popover.remove();
       document.removeEventListener('click', closeHandler);
@@ -469,17 +537,14 @@ class PulseChatApp {
 
     const index = msg.reactions[emoji].indexOf(this.userId);
     if (index > -1) {
-      // Remove reaction
       msg.reactions[emoji].splice(index, 1);
     } else {
-      // Add reaction
       msg.reactions[emoji].push(this.userId);
     }
 
     this.saveMessages();
     this.renderMessages();
 
-    // Broadcast the update
     this.broadcast({
       type: 'reaction_update',
       messageId: messageId,
@@ -487,19 +552,17 @@ class PulseChatApp {
     });
   }
 
-  // --- Real-time Realization (BroadcastChannel) ---
   setupBroadcastChannel() {
     this.channel.onmessage = (event) => {
       const data = event.data;
+      if (!data) return;
       
       switch (data.type) {
         case 'message':
-          // Add external message if it's not already in storage
           if (!this.messages.find(m => m.id === data.message.id)) {
             this.messages.push(data.message);
             this.saveMessages();
             
-            // Increment room badge if we're not currently looking at it
             if (data.message.room !== this.currentRoom) {
               const badge = document.getElementById(`badge-${data.message.room}`);
               if (badge) {
@@ -514,7 +577,6 @@ class PulseChatApp {
           break;
           
         case 'heartbeat':
-          // Update details about active user
           this.activeUsers.set(data.userId, {
             username: data.username,
             avatarBg: data.avatarBg,
@@ -558,14 +620,9 @@ class PulseChatApp {
   }
 
   broadcast(payload) {
-    try {
-      this.channel.postMessage(payload);
-    } catch (e) {
-      console.warn("Unable to broadcast message:", e);
-    }
+    this.channel.postMessage(payload);
   }
 
-  // --- Typing Indicator ---
   handleTyping() {
     this.sendHeartbeat(true);
     this.broadcast({
@@ -588,6 +645,7 @@ class PulseChatApp {
   }
 
   updateTypingIndicator() {
+    if (!this.dom.typingIndicator) return;
     const typingUsers = [];
     this.activeUsers.forEach((user) => {
       if (user.isTyping) {
@@ -606,7 +664,6 @@ class PulseChatApp {
     }
   }
 
-  // --- Date/Time Helpers ---
   formatRelativeTime(timestamp) {
     const diff = Date.now() - timestamp;
     if (diff < 10000) return 'just now';
@@ -627,44 +684,52 @@ class PulseChatApp {
     });
   }
 
-  // --- Listeners Setup ---
   setupEventListeners() {
-    // Theme toggle
-    this.dom.themeToggle.addEventListener('click', () => this.toggleTheme());
+    if (this.dom.themeToggle) {
+      this.dom.themeToggle.addEventListener('click', () => this.toggleTheme());
+    }
 
-    // Profile Setup
-    this.dom.setNameBtn.addEventListener('click', () => this.handleSetName());
-    this.dom.usernameInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') this.handleSetName();
-    });
+    if (this.dom.setNameBtn) {
+      this.dom.setNameBtn.addEventListener('click', () => this.handleSetName());
+    }
+    
+    if (this.dom.usernameInput) {
+      this.dom.usernameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') this.handleSetName();
+      });
+    }
 
-    // Add Room Button
-    this.dom.addRoomBtn.addEventListener('click', () => this.handleAddRoom());
+    if (this.dom.addRoomBtn) {
+      this.dom.addRoomBtn.addEventListener('click', () => this.handleAddRoom());
+    }
 
-    // Message input text auto-grow and Send listener
-    this.dom.messageInput.addEventListener('input', () => {
-      this.dom.messageInput.style.height = 'auto';
-      this.dom.messageInput.style.height = (this.dom.messageInput.scrollHeight - 20) + 'px';
-      this.handleTyping();
-    });
+    if (this.dom.messageInput) {
+      this.dom.messageInput.addEventListener('input', () => {
+        this.dom.messageInput.style.height = 'auto';
+        this.dom.messageInput.style.height = (this.dom.messageInput.scrollHeight - 20) + 'px';
+        this.handleTyping();
+      });
 
-    this.dom.messageInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        this.sendMessage();
-      }
-    });
+      this.dom.messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          this.sendMessage();
+        }
+      });
+    }
 
-    this.dom.sendBtn.addEventListener('click', () => this.sendMessage());
+    if (this.dom.sendBtn) {
+      this.dom.sendBtn.addEventListener('click', () => this.sendMessage());
+    }
 
-    // Mobile sidebar toggle
-    this.dom.sidebarToggle.addEventListener('click', () => {
-      this.dom.sidebar.classList.toggle('open');
-    });
+    if (this.dom.sidebarToggle && this.dom.sidebar) {
+      this.dom.sidebarToggle.addEventListener('click', () => {
+        this.dom.sidebar.classList.toggle('open');
+      });
+    }
   }
 }
 
-// Instantiate the app
 window.addEventListener('DOMContentLoaded', () => {
   window.chatApp = new PulseChatApp();
 });
