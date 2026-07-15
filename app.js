@@ -83,7 +83,9 @@ class PulseChatApp {
       sendBtn: document.getElementById('sendBtn'),
       typingIndicator: document.getElementById('typingIndicator'),
       sidebar: document.getElementById('sidebar'),
-      sidebarToggle: document.getElementById('sidebarToggle')
+      sidebarToggle: document.getElementById('sidebarToggle'),
+      closeSidebarBtn: document.getElementById('closeSidebarBtn'),
+      sidebarOverlay: document.getElementById('sidebarOverlay')
     };
 
     this.init();
@@ -334,6 +336,9 @@ class PulseChatApp {
 
     if (this.dom.sidebar) {
       this.dom.sidebar.classList.remove('open');
+    }
+    if (this.dom.sidebarOverlay) {
+      this.dom.sidebarOverlay.classList.remove('active');
     }
   }
 
@@ -722,9 +727,24 @@ class PulseChatApp {
       this.dom.sendBtn.addEventListener('click', () => this.sendMessage());
     }
 
-    if (this.dom.sidebarToggle && this.dom.sidebar) {
+    if (this.dom.sidebarToggle && this.dom.sidebar && this.dom.sidebarOverlay) {
       this.dom.sidebarToggle.addEventListener('click', () => {
-        this.dom.sidebar.classList.toggle('open');
+        this.dom.sidebar.classList.add('open');
+        this.dom.sidebarOverlay.classList.add('active');
+      });
+    }
+
+    if (this.dom.closeSidebarBtn && this.dom.sidebar && this.dom.sidebarOverlay) {
+      this.dom.closeSidebarBtn.addEventListener('click', () => {
+        this.dom.sidebar.classList.remove('open');
+        this.dom.sidebarOverlay.classList.remove('active');
+      });
+    }
+
+    if (this.dom.sidebarOverlay && this.dom.sidebar) {
+      this.dom.sidebarOverlay.addEventListener('click', () => {
+        this.dom.sidebar.classList.remove('open');
+        this.dom.sidebarOverlay.classList.remove('active');
       });
     }
   }

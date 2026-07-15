@@ -13,11 +13,17 @@
 </head>
 <body>
   <div class="app-container">
+    <!-- Overlay for closing sidebar on mobile/tablet -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <!-- Sidebar: Rooms & Users -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <h2>Pulse Chat</h2>
-        <button id="themeToggle" class="theme-btn" aria-label="Toggle dark/light theme">🌙</button>
+        <div class="header-actions">
+          <button id="themeToggle" class="theme-btn" aria-label="Toggle dark/light theme">🌙</button>
+          <button id="closeSidebarBtn" class="close-sidebar-btn" aria-label="Close Sidebar">×</button>
+        </div>
       </div>
       <div class="profile-section">
         <div class="avatar" id="userAvatar"></div>

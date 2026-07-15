@@ -684,10 +684,74 @@ h3 {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
+/* Header actions container */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Close sidebar button styling */
+.close-sidebar-btn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 1.75rem;
+  font-weight: 300;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 50%;
+  color: var(--text-primary);
+  line-height: 1;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.close-sidebar-btn:hover {
+  background-color: var(--accent-light);
+  color: var(--danger-color);
+}
+
+/* Sidebar overlay background */
+.sidebar-overlay {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 8;
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+  pointer-events: none;
+}
+
+.sidebar-overlay.active {
+  display: block;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Responsive Breakpoints */
+
+/* Laptop & Desktop (Default layout) */
+@media (min-width: 1025px) {
+  .sidebar {
+    transform: translateX(0) !important;
+  }
+}
+
+/* Tablets (1024px and below) */
+@media (max-width: 1024px) {
   .sidebar-toggle-btn {
     display: block;
+  }
+  
+  .close-sidebar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   
   .sidebar {
@@ -697,6 +761,7 @@ h3 {
     bottom: 0;
     transform: translateX(-100%);
     box-shadow: var(--shadow-lg);
+    transition: transform var(--transition-normal);
   }
   
   .sidebar.open {
@@ -704,6 +769,47 @@ h3 {
   }
   
   .message-group {
-    max-width: 85%;
+    max-width: 80%;
   }
 }
+
+/* Mobile Phones (480px and below) */
+@media (max-width: 480px) {
+  .sidebar {
+    width: 280px; /* slightly narrower sidebar to fit small phone screens */
+  }
+
+  .chat-header {
+    padding: 1rem;
+  }
+  
+  .messages {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .message-group {
+    max-width: 90%;
+  }
+
+  .chat-input {
+    padding: 0.8rem 1rem;
+  }
+  
+  #messageInput {
+    padding: 0.6rem 0.8rem;
+    font-size: 0.9rem;
+  }
+  
+  .primary-btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .avatar {
+    width: 64px;
+    height: 64px;
+    font-size: 1.5rem;
+  }
+}
+
